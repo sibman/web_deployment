@@ -56,7 +56,10 @@ pub struct CreateTodo {
     text: String,
 }
 
-pub async fn todos_create(State(db): State<Db>, Json(input): Json<CreateTodo>) -> impl IntoResponse {
+pub async fn todos_create(
+    State(db): State<Db>,
+    Json(input): Json<CreateTodo>,
+) -> impl IntoResponse {
     let todo = Todo {
         id: Uuid::new_v4(),
         text: input.text,
@@ -115,7 +118,6 @@ pub struct Todo {
     text: String,
     completed: bool,
 }
-
 
 // Original code
 pub fn add(left: usize, right: usize) -> usize {

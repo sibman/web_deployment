@@ -16,15 +16,14 @@
 use axum::{
     error_handling::HandleErrorLayer,
     http::StatusCode,
-    routing::{get, put}, Router,
+    routing::{get, put},
+    Router,
 };
-use std::{
-    time::Duration,
-};
+use rest_service_lib as lib;
+use std::time::Duration;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use rest_service_lib as lib;
 
 #[tokio::main]
 async fn main() {
@@ -43,7 +42,9 @@ async fn main() {
         .route("/todos", get(lib::todos_index).post(lib::todos_create))
         .route(
             "/todos/:id",
-            put(lib::todos_update).patch(lib::todos_update).delete(lib::todos_delete),
+            put(lib::todos_update)
+                .patch(lib::todos_update)
+                .delete(lib::todos_delete),
         )
         // Add middleware to all routes
         .layer(

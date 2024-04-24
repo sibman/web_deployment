@@ -14,22 +14,16 @@
 //! ```
 
 use axum::{
-    error_handling::HandleErrorLayer,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, put},
-    Json, Router,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::Duration,
 };
-use tower::{BoxError, ServiceBuilder};
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 
 // The query parameters for todos index

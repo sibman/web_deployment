@@ -26,11 +26,6 @@ use std::{
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
-use utoipa::openapi::RefOr;
-use utoipa::openapi::ObjectBuilder;
-use utoipa::openapi::SchemaType;
-use utoipa::openapi::SchemaFormat;
-use utoipa::openapi::KnownFormat;
 
 
 // The query parameters for todos index

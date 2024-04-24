@@ -15,22 +15,68 @@
 
 pub mod api {
     use axum::{
+        error_handling::HandleErrorLayer,
         extract::{Path, Query, State},
         http::StatusCode,
         response::IntoResponse,
-        Json,
+        routing::{get, put},
+        Json, Router,
     };
     use serde::{Deserialize, Serialize};
+    use std::time::Duration;
     use std::{
         collections::HashMap,
         sync::{Arc, RwLock},
     };
+    use tower::{BoxError, ServiceBuilder};
+    use tower_http::trace::TraceLayer;
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    use utoipa::OpenApi;
     use utoipa::ToSchema;
+    use utoipa_swagger_ui::SwaggerUi;
     use uuid::Uuid;
+
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(todos_index, todos_create, todos_update, todos_delete),
+        components(schemas(Pagination, Todo, CreateTodo, UpdateTodo))
+    )]
+    struct ApiDoc;
+
+    pub fn app() -> Router {
+        let db = Db::default();
+
+        // Compose the routes
+        Router::new()
+            .route("/todos", get(todos_index).post(todos_create))
+            .route(
+                "/todos/:id",
+                put(todos_update).patch(todos_update).delete(todos_delete),
+            )
+            .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+            // Add middleware to all routes
+            .layer(
+                ServiceBuilder::new()
+                    .layer(HandleErrorLayer::new(|error: BoxError| async move {
+                        if error.is::<tower::timeout::error::Elapsed>() {
+                            Ok(StatusCode::REQUEST_TIMEOUT)
+                        } else {
+                            Err((
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Unhandled internal error: {error}"),
+                            ))
+                        }
+                    }))
+                    .timeout(Duration::from_secs(10))
+                    .layer(TraceLayer::new_for_http())
+                    .into_inner(),
+            )
+            .with_state(db)
+    }
 
     // The query parameters for todos index
     #[derive(Debug, Deserialize, Default, ToSchema)]
-    pub struct Pagination {
+    struct Pagination {
         pub offset: Option<usize>,
         pub limit: Option<usize>,
     }
@@ -45,10 +91,10 @@ pub mod api {
         (status = 200, description = "Todos found succesfully", body = [Todo])
     ),
     params(
-        ("pagination" = Pagination, Query, description = "Todo database pagination to retrieve by ofset and limit"),
+        ("pagination" = Option<Pagination>, Query, description = "Todo database pagination to retrieve by ofset and limit"),
     )
     )]
-    pub async fn todos_index(
+    async fn todos_index(
         pagination: Option<Query<Pagination>>,
         State(db): State<Db>,
     ) -> impl IntoResponse {
@@ -67,7 +113,7 @@ pub mod api {
     }
 
     #[derive(Debug, Deserialize, ToSchema)]
-    pub struct CreateTodo {
+    struct CreateTodo {
         text: String,
     }
 
@@ -81,7 +127,7 @@ pub mod api {
         (status = 201, description = "Create todo succesfully", body = Todo)
     )
     )]
-    pub async fn todos_create(
+    async fn todos_create(
         State(db): State<Db>,
         Json(input): Json<CreateTodo>,
     ) -> impl IntoResponse {
@@ -97,7 +143,7 @@ pub mod api {
     }
 
     #[derive(Debug, Deserialize, ToSchema)]
-    pub struct UpdateTodo {
+    struct UpdateTodo {
         text: Option<String>,
         completed: Option<bool>,
     }
@@ -116,7 +162,7 @@ pub mod api {
         ("id" = Path<Uuid>, Path, description = "Todo database id to update Todo for"),
     )
     )]
-    pub async fn todos_update(
+    async fn todos_update(
         Path(id): Path<Uuid>,
         State(db): State<Db>,
         Json(input): Json<UpdateTodo>,
@@ -155,7 +201,7 @@ pub mod api {
         ("id" = Path<Uuid>, Path, description = "Todo database id to delete Todo for"),
     )
     )]
-    pub async fn todos_delete(Path(id): Path<Uuid>, State(db): State<Db>) -> impl IntoResponse {
+    async fn todos_delete(Path(id): Path<Uuid>, State(db): State<Db>) -> impl IntoResponse {
         if db.write().unwrap().remove(&id).is_some() {
             StatusCode::NO_CONTENT
         } else {
@@ -163,27 +209,204 @@ pub mod api {
         }
     }
 
-    pub type Db = Arc<RwLock<HashMap<Uuid, Todo>>>;
+    type Db = Arc<RwLock<HashMap<Uuid, Todo>>>;
 
     #[derive(Debug, Serialize, Clone, ToSchema)]
-    pub struct Todo {
+    struct Todo {
         id: Uuid,
         text: String,
         completed: bool,
     }
 }
-// Original code
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        body::Body,
+        extract::connect_info::MockConnectInfo,
+        extract::{Path, Query, State},
+        http::{self, Request, StatusCode},
+    };
+    use http::Uri;
+    use http_body_util::BodyExt; // for `collect`
+    use serde_json::{json, Value};
+    use tokio::net::TcpListener;
+    use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    #[tokio::test]
+    async fn todos_get() {
+        let app = api::app();
+
+        // `Router` implements `tower::Service<Request<Body>>` so we can
+        // call it like any tower service, no need to run an HTTP server.
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::GET)
+                    .uri("/todos")
+                    .query(Query::empty())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"[]");
     }
+
+    #[tokio::test]
+    async fn todos_get_plus_query() {
+        let app = api::app();
+
+        // `Router` implements `tower::Service<Request<Body>>` so we can
+        // call it like any tower service, no need to run an HTTP server.
+        let uri: Uri = "http://127.0.0.1/todos?offset=0&limit=0".parse().unwrap();
+        let pagination: Query<api::Pagination> = Query::try_from_uri(&uri).unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::GET)
+                    .uri("/todos")
+                    .query(pagination)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"[]");
+    }
+
+    // #[tokio::test]
+    // async fn json() {
+    //     let app = app();
+
+    //     let response = app
+    //         .oneshot(
+    //             Request::builder()
+    //                 .method(http::Method::POST)
+    //                 .uri("/json")
+    //                 .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+    //                 .body(Body::from(
+    //                     serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap(),
+    //                 ))
+    //                 .unwrap(),
+    //         )
+    //         .await
+    //         .unwrap();
+
+    //     assert_eq!(response.status(), StatusCode::OK);
+
+    //     let body = response.into_body().collect().await.unwrap().to_bytes();
+    //     let body: Value = serde_json::from_slice(&body).unwrap();
+    //     assert_eq!(body, json!({ "data": [1, 2, 3, 4] }));
+    // }
+
+    #[tokio::test]
+    async fn not_found() {
+        let app = api::app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/does-not-exist")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert!(body.is_empty());
+    }
+
+    // You can also spawn a server and talk to it like any other HTTP server:
+    // #[tokio::test]
+    // async fn the_real_deal() {
+    //     let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
+    //     let addr = listener.local_addr().unwrap();
+
+    //     tokio::spawn(async move {
+    //         axum::serve(listener, app()).await.unwrap();
+    //     });
+
+    //     let client =
+    //         hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+    //             .build_http();
+
+    //     let response = client
+    //         .request(
+    //             Request::builder()
+    //                 .uri(format!("http://{addr}"))
+    //                 .header("Host", "localhost")
+    //                 .body(Body::empty())
+    //                 .unwrap(),
+    //         )
+    //         .await
+    //         .unwrap();
+
+    //     let body = response.into_body().collect().await.unwrap().to_bytes();
+    //     assert_eq!(&body[..], b"Hello, World!");
+    // }
+
+    // You can use `ready()` and `call()` to avoid using `clone()`
+    // in multiple request
+    #[tokio::test]
+    async fn multiple_request() {
+        let mut app = api::app().into_service();
+
+        let request = Request::builder()
+            .method(http::Method::GET)
+            .uri("/todos")
+            .body(Body::empty())
+            .unwrap();
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = Request::builder()
+            .method(http::Method::GET)
+            .uri("/todos")
+            .body(Body::empty())
+            .unwrap();
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // Here we're calling `/requires-connect-info` which requires `ConnectInfo`
+    //
+    // That is normally set with `Router::into_make_service_with_connect_info` but we can't easily
+    // use that during tests. The solution is instead to set the `MockConnectInfo` layer during
+    // tests.
+    // #[tokio::test]
+    // async fn with_into_make_service_with_connect_info() {
+    //     let mut app = app()
+    //         .layer(MockConnectInfo(SocketAddr::from(([0, 0, 0, 0], 3000))))
+    //         .into_service();
+
+    //     let request = Request::builder()
+    //         .uri("/requires-connect-info")
+    //         .body(Body::empty())
+    //         .unwrap();
+    //     let response = app.ready().await.unwrap().call(request).await.unwrap();
+    //     assert_eq!(response.status(), StatusCode::OK);
+    // }
 }

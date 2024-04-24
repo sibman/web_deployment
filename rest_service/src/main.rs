@@ -20,59 +20,23 @@ use axum::{
     Router,
 };
 use rest_service_lib as lib;
-use utoipa_swagger_ui::SwaggerUi;
 use std::time::Duration;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utoipa::OpenApi;
-
-#[derive(OpenApi)]
-#[openapi(paths(lib::api::todos_index, lib::api::todos_create, lib::api::todos_update, lib::api::todos_delete), 
-components(schemas(lib::api::Pagination, lib::api::Todo, lib::api::CreateTodo, lib::api::UpdateTodo)))]
-pub struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "example_todos=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "rest_service=debug,rest_service_lib=debug,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let db = lib::api::Db::default();
-
     // Compose the routes
-    let app = Router::new()
-        .route("/todos", get(lib::api::todos_index).post(lib::api::todos_create))
-        .route(
-            "/todos/:id",
-            put(lib::api::todos_update)
-                .patch(lib::api::todos_update)
-                .delete(lib::api::todos_delete),
-        )
-        .merge(SwaggerUi::new("/swagger-ui")
-        .url("/api-docs/openapi.json", ApiDoc::openapi()))
-        // Add middleware to all routes
-        .layer(
-            ServiceBuilder::new()
-                .layer(HandleErrorLayer::new(|error: BoxError| async move {
-                    if error.is::<tower::timeout::error::Elapsed>() {
-                        Ok(StatusCode::REQUEST_TIMEOUT)
-                    } else {
-                        Err((
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("Unhandled internal error: {error}"),
-                        ))
-                    }
-                }))
-                .timeout(Duration::from_secs(10))
-                .layer(TraceLayer::new_for_http())
-                .into_inner(),
-        )
-        .with_state(db);
+    let app = lib::api::app();
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await

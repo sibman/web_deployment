@@ -13,16 +13,7 @@
 //! cargo run -p rest_service
 //! ```
 
-use axum::{
-    error_handling::HandleErrorLayer,
-    http::StatusCode,
-    routing::{get, put},
-    Router,
-};
 use rest_service_lib as lib;
-use std::time::Duration;
-use tower::{BoxError, ServiceBuilder};
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]

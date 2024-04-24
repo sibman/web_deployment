@@ -28,8 +28,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
-#[openapi(paths(lib::todos_index, lib::todos_create, lib::todos_update, lib::todos_delete), 
-components(schemas(lib::Pagination, lib::Todo, lib::CreateTodo, lib::UpdateTodo)))]
+#[openapi(paths(lib::api::todos_index, lib::api::todos_create, lib::api::todos_update, lib::api::todos_delete), 
+components(schemas(lib::api::Pagination, lib::api::Todo, lib::api::CreateTodo, lib::api::UpdateTodo)))]
 pub struct ApiDoc;
 
 #[tokio::main]

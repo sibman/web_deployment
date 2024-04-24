@@ -27,51 +27,13 @@ use std::{
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-
+pub mod api {
 // The query parameters for todos index
 #[derive(Debug, Deserialize, Default, ToSchema)]
 pub struct Pagination {
     pub offset: Option<usize>,
     pub limit: Option<usize>,
 }
-
-// #[derive(Debug, Default, ToSchema)]
-// pub struct MyQueryPagination(pub axum::extract::Query<Pagination>);
-
-// impl<'__s> utoipa::ToSchema<'__s> for Uuid {
-//     fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>) {
-//          (
-//             "Uuid",
-//             utoipa::openapi::ObjectBuilder::new()
-//                 .property(
-//                     "id",
-//                     utoipa::openapi::ObjectBuilder::new()
-//                         .schema_type(utoipa::openapi::SchemaType::Integer)
-//                         .format(Some(utoipa::openapi::SchemaFormat::KnownFormat(
-//                             utoipa::openapi::KnownFormat::Int64,
-//                         ))),
-//                 )
-//                 .required("id")
-//                 .property(
-//                     "name",
-//                     utoipa::openapi::ObjectBuilder::new()
-//                         .schema_type(utoipa::openapi::SchemaType::String),
-//                 )
-//                 .required("name")
-//                 .property(
-//                     "age",
-//                     utoipa::openapi::ObjectBuilder::new()
-//                         .schema_type(utoipa::openapi::SchemaType::Integer)
-//                         .format(Some(utoipa::openapi::SchemaFormat::KnownFormat(
-//                             utoipa::openapi::KnownFormat::Int32,
-//                         ))),
-//                 )
-//                 .example(Some(serde_json::json!({
-//                   "name":"bob the cat","id":1
-//                 })))
-//                 .into(),
-//         ) }
-// }
 
 /// Get todos
 ///
@@ -159,7 +121,6 @@ pub async fn todos_update(
     State(db): State<Db>,
     Json(input): Json<UpdateTodo>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    //let MyUuid(uid) = id;
     let mut todo = db
         .read()
         .unwrap()
@@ -195,7 +156,6 @@ pub async fn todos_update(
     )
 )]
 pub async fn todos_delete(Path(id): Path<Uuid>, State(db): State<Db>) -> impl IntoResponse {
-    //let MyUuid(uid) = id;    
     if db.write().unwrap().remove(&id).is_some() {
         StatusCode::NO_CONTENT
     } else {
@@ -211,7 +171,7 @@ pub struct Todo {
     text: String,
     completed: bool,
 }
-
+}
 // Original code
 pub fn add(left: usize, right: usize) -> usize {
     left + right

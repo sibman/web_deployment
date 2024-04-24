@@ -24,15 +24,29 @@ use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 // The query parameters for todos index
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, ToSchema)]
 pub struct Pagination {
     pub offset: Option<usize>,
     pub limit: Option<usize>,
 }
 
+/// Get todos
+///
+/// Get todos from database
+#[utoipa::path(
+    get,
+    path = "/todos",
+    responses(
+        (status = 200, description = "Todos found succesfully", body = Vec<Todo>)
+    ),
+    params(
+        ("pagination" = Option<Query<Pagination>>, Path, description = "Todo database pagination to retrieve by ofset and limit"),
+    )
+)]
 pub async fn todos_index(
     pagination: Option<Query<Pagination>>,
     State(db): State<Db>,
@@ -51,11 +65,21 @@ pub async fn todos_index(
     Json(todos)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTodo {
     text: String,
 }
 
+/// Create todo
+///
+/// Cteate todo in database with auto genearate uuid v4
+#[utoipa::path(
+    post,
+    path = "/todos",
+    responses(
+        (status = 201, description = "Create todo succesfully", body = Todo)
+    )
+)]
 pub async fn todos_create(
     State(db): State<Db>,
     Json(input): Json<CreateTodo>,
@@ -71,12 +95,26 @@ pub async fn todos_create(
     (StatusCode::CREATED, Json(todo))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTodo {
     text: Option<String>,
     completed: Option<bool>,
 }
 
+/// Update todo by id
+///
+/// Update todo in database by todo id
+#[utoipa::path(
+    put,
+    path = "/todos/{id}",
+    responses(
+        (status = 200, description = "Todo updated succesfully", body = Todo),
+        (status = NOT_FOUND, description = "Todod was not found")
+    ),
+    params(
+        ("id" = Uuid, Path, description = "Todo database id to update Todo for"),
+    )
+)]
 pub async fn todos_update(
     Path(id): Path<Uuid>,
     State(db): State<Db>,
@@ -102,6 +140,20 @@ pub async fn todos_update(
     Ok(Json(todo))
 }
 
+/// Delete todo by id
+///
+/// Delete todo from database by todo id
+#[utoipa::path(
+    delete,
+    path = "/todos/{id}",
+    responses(
+        (status = NO_CONTENT, description = "Todo deleted succesfully"),
+        (status = NOT_FOUND, description = "Todo was not found")
+    ),
+    params(
+        ("id" = Uuid, Path, description = "Todo database id to delete Todo for"),
+    )
+)]
 pub async fn todos_delete(Path(id): Path<Uuid>, State(db): State<Db>) -> impl IntoResponse {
     if db.write().unwrap().remove(&id).is_some() {
         StatusCode::NO_CONTENT
@@ -112,7 +164,7 @@ pub async fn todos_delete(Path(id): Path<Uuid>, State(db): State<Db>) -> impl In
 
 pub type Db = Arc<RwLock<HashMap<Uuid, Todo>>>;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct Todo {
     id: Uuid,
     text: String,

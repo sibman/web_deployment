@@ -30,7 +30,7 @@ pub mod api {
     };
     use tower::{BoxError, ServiceBuilder};
     use tower_http::trace::TraceLayer;
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    
     use utoipa::OpenApi;
     use utoipa::ToSchema;
     use utoipa_swagger_ui::SwaggerUi;

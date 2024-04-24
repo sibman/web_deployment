@@ -15,6 +15,7 @@
 
 use axum::{
     error_handling::HandleErrorLayer,
+    extract::Query,
     http::StatusCode,
     routing::{get, put},
     Router,
@@ -26,6 +27,7 @@ use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[derive(OpenApi)]
 #[openapi(paths(lib::todos_index, lib::todos_create, lib::todos_update, lib::todos_delete), 

@@ -26,6 +26,12 @@ use std::{
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
+use utoipa::openapi::RefOr;
+use utoipa::openapi::ObjectBuilder;
+use utoipa::openapi::SchemaType;
+use utoipa::openapi::SchemaFormat;
+use utoipa::openapi::KnownFormat;
+
 
 // The query parameters for todos index
 #[derive(Debug, Deserialize, Default, ToSchema)]
@@ -34,6 +40,44 @@ pub struct Pagination {
     pub limit: Option<usize>,
 }
 
+// #[derive(Debug, Default, ToSchema)]
+// pub struct MyQueryPagination(pub axum::extract::Query<Pagination>);
+
+// impl<'__s> utoipa::ToSchema<'__s> for Uuid {
+//     fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>) {
+//          (
+//             "Uuid",
+//             utoipa::openapi::ObjectBuilder::new()
+//                 .property(
+//                     "id",
+//                     utoipa::openapi::ObjectBuilder::new()
+//                         .schema_type(utoipa::openapi::SchemaType::Integer)
+//                         .format(Some(utoipa::openapi::SchemaFormat::KnownFormat(
+//                             utoipa::openapi::KnownFormat::Int64,
+//                         ))),
+//                 )
+//                 .required("id")
+//                 .property(
+//                     "name",
+//                     utoipa::openapi::ObjectBuilder::new()
+//                         .schema_type(utoipa::openapi::SchemaType::String),
+//                 )
+//                 .required("name")
+//                 .property(
+//                     "age",
+//                     utoipa::openapi::ObjectBuilder::new()
+//                         .schema_type(utoipa::openapi::SchemaType::Integer)
+//                         .format(Some(utoipa::openapi::SchemaFormat::KnownFormat(
+//                             utoipa::openapi::KnownFormat::Int32,
+//                         ))),
+//                 )
+//                 .example(Some(serde_json::json!({
+//                   "name":"bob the cat","id":1
+//                 })))
+//                 .into(),
+//         ) }
+// }
+
 /// Get todos
 ///
 /// Get todos from database
@@ -41,10 +85,10 @@ pub struct Pagination {
     get,
     path = "/todos",
     responses(
-        (status = 200, description = "Todos found succesfully", body = Vec<Todo>)
+        (status = 200, description = "Todos found succesfully", body = [Todo])
     ),
     params(
-        ("pagination" = Option<Query<Pagination>>, Path, description = "Todo database pagination to retrieve by ofset and limit"),
+        ("pagination" = Pagination, Query, description = "Todo database pagination to retrieve by ofset and limit"),
     )
 )]
 pub async fn todos_index(
@@ -112,7 +156,7 @@ pub struct UpdateTodo {
         (status = NOT_FOUND, description = "Todod was not found")
     ),
     params(
-        ("id" = Uuid, Path, description = "Todo database id to update Todo for"),
+        ("id" = Path<Uuid>, Path, description = "Todo database id to update Todo for"),
     )
 )]
 pub async fn todos_update(
@@ -120,6 +164,7 @@ pub async fn todos_update(
     State(db): State<Db>,
     Json(input): Json<UpdateTodo>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    //let MyUuid(uid) = id;
     let mut todo = db
         .read()
         .unwrap()
@@ -151,10 +196,11 @@ pub async fn todos_update(
         (status = NOT_FOUND, description = "Todo was not found")
     ),
     params(
-        ("id" = Uuid, Path, description = "Todo database id to delete Todo for"),
+        ("id" = Path<Uuid>, Path, description = "Todo database id to delete Todo for"),
     )
 )]
 pub async fn todos_delete(Path(id): Path<Uuid>, State(db): State<Db>) -> impl IntoResponse {
+    //let MyUuid(uid) = id;    
     if db.write().unwrap().remove(&id).is_some() {
         StatusCode::NO_CONTENT
     } else {

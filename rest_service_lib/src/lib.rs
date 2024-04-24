@@ -13,6 +13,7 @@
 //! cargo run -p rest_service
 //! ```
 
+pub mod api {
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -27,7 +28,6 @@ use std::{
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-pub mod api {
 // The query parameters for todos index
 #[derive(Debug, Deserialize, Default, ToSchema)]
 pub struct Pagination {

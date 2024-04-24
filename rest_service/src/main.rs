@@ -42,16 +42,16 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let db = lib::Db::default();
+    let db = lib::api::Db::default();
 
     // Compose the routes
     let app = Router::new()
-        .route("/todos", get(lib::todos_index).post(lib::todos_create))
+        .route("/todos", get(lib::api::todos_index).post(lib::api::todos_create))
         .route(
             "/todos/:id",
-            put(lib::todos_update)
-                .patch(lib::todos_update)
-                .delete(lib::todos_delete),
+            put(lib::api::todos_update)
+                .patch(lib::api::todos_update)
+                .delete(lib::api::todos_delete),
         )
         .merge(SwaggerUi::new("/swagger-ui")
         .url("/api-docs/openapi.json", ApiDoc::openapi()))

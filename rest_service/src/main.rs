@@ -20,10 +20,17 @@ use axum::{
     Router,
 };
 use rest_service_lib as lib;
+use utoipa_swagger_ui::SwaggerUi;
 use std::time::Duration;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::OpenApi;
+
+#[derive(OpenApi)]
+#[openapi(paths(lib::todos_index, lib::todos_create, lib::todos_update, lib::todos_delete), 
+components(schemas(lib::Pagination, lib::Todo, lib::CreateTodo, lib::UpdateTodo)))]
+pub struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -46,6 +53,8 @@ async fn main() {
                 .patch(lib::todos_update)
                 .delete(lib::todos_delete),
         )
+        .merge(SwaggerUi::new("/swagger-ui")
+        .url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Add middleware to all routes
         .layer(
             ServiceBuilder::new()

@@ -19,7 +19,7 @@ pub mod api {
         extract::{Path, Query, State},
         http::StatusCode,
         response::IntoResponse,
-        routing::{get, put},
+        routing::{get, post, put},
         Json, Router,
     };
     use serde::{Deserialize, Serialize};
@@ -35,7 +35,9 @@ pub mod api {
     use utoipa::ToSchema;
     use utoipa_swagger_ui::SwaggerUi;
     use uuid::Uuid;
-
+    use std::net::SocketAddr;
+    use axum::extract::ConnectInfo;
+    
     #[derive(OpenApi)]
     #[openapi(
         paths(todos_index, todos_create, todos_update, todos_delete),
@@ -53,6 +55,20 @@ pub mod api {
                 "/todos/:id",
                 put(todos_update).patch(todos_update).delete(todos_delete),
             )
+            .route(
+                "/json",
+                post(|payload: Json<serde_json::Value>| async move {
+                    Json(serde_json::json!({ "data": payload.0 }))
+                }),
+            )
+            .route(
+                "/requires-connect-info",
+                get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move { format!("Hi {addr}") }),
+            )
+            .route("/actuator/health", get(actuator_health))
+            .route("/actuator/info", get(actuator_info))
+            .route("/actuator/health/liveness", get(actuator_health_liveness))
+            .route("/actuator/health/readiness", get(actuator_health_readiness))
             .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
             // Add middleware to all routes
             .layer(
@@ -209,6 +225,38 @@ pub mod api {
         }
     }
 
+    async fn actuator_info() -> impl IntoResponse {
+        let info_resp = "";
+        Json(info_resp)
+    }
+
+    async fn actuator_health() -> impl IntoResponse {
+        let health_resp = if is_healthy() { "{\"status\": \"UP\"}" } else {"{\"status\": \"DOWN\"}"};
+        Json(health_resp)
+    }
+
+    async fn actuator_health_liveness() -> impl IntoResponse {
+        let liveness_resp = if is_liveness() { "{\"status\": \"UP\"}" } else {"{\"status\": \"DOWN\"}"};
+        Json(liveness_resp)
+    }
+
+    async fn actuator_health_readiness() -> impl IntoResponse {
+        let readiness_resp = if is_readiness() { "{\"status\": \"UP\"}" } else {"{\"status\": \"DOWN\"}"};
+        Json(readiness_resp)
+    }
+
+    fn is_healthy() -> bool {
+        true
+    }
+
+    fn is_liveness() -> bool {
+        true
+    }
+
+    fn is_readiness() -> bool {
+        true
+    }
+
     type Db = Arc<RwLock<HashMap<Uuid, Todo>>>;
 
     #[derive(Debug, Serialize, Clone, ToSchema)]
@@ -225,14 +273,15 @@ mod tests {
     use axum::{
         body::Body,
         extract::connect_info::MockConnectInfo,
-        extract::{Path, Query, State},
         http::{self, Request, StatusCode},
     };
-    use http::Uri;
     use http_body_util::BodyExt; // for `collect`
     use serde_json::{json, Value};
     use tokio::net::TcpListener;
     use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
+    use axum::routing::post;
+    use axum::extract::ConnectInfo;
+    use std::net::SocketAddr;
 
     #[tokio::test]
     async fn todos_get() {
@@ -245,7 +294,6 @@ mod tests {
                 Request::builder()
                     .method(http::Method::GET)
                     .uri("/todos")
-                    .query(Query::empty())
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -264,15 +312,27 @@ mod tests {
 
         // `Router` implements `tower::Service<Request<Body>>` so we can
         // call it like any tower service, no need to run an HTTP server.
-        let uri: Uri = "http://127.0.0.1/todos?offset=0&limit=0".parse().unwrap();
-        let pagination: Query<api::Pagination> = Query::try_from_uri(&uri).unwrap();
-
-        let response = app
+        let response = app.clone()
             .oneshot(
                 Request::builder()
                     .method(http::Method::GET)
-                    .uri("/todos")
-                    .query(pagination)
+                    .uri("/todos?offset=0&limit=0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"[]");
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::GET)
+                    .uri("/todos?offset=0&limit=2")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -285,30 +345,30 @@ mod tests {
         assert_eq!(&body[..], b"[]");
     }
 
-    // #[tokio::test]
-    // async fn json() {
-    //     let app = app();
+    #[tokio::test]
+    async fn json() {
+        let app = api::app();
 
-    //     let response = app
-    //         .oneshot(
-    //             Request::builder()
-    //                 .method(http::Method::POST)
-    //                 .uri("/json")
-    //                 .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
-    //                 .body(Body::from(
-    //                     serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap(),
-    //                 ))
-    //                 .unwrap(),
-    //         )
-    //         .await
-    //         .unwrap();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/json")
+                    .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+                    .body(Body::from(
+                        serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-    //     assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
 
-    //     let body = response.into_body().collect().await.unwrap().to_bytes();
-    //     let body: Value = serde_json::from_slice(&body).unwrap();
-    //     assert_eq!(body, json!({ "data": [1, 2, 3, 4] }));
-    // }
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body, json!({ "data": [1, 2, 3, 4] }));
+    }
 
     #[tokio::test]
     async fn not_found() {
@@ -330,33 +390,33 @@ mod tests {
     }
 
     // You can also spawn a server and talk to it like any other HTTP server:
-    // #[tokio::test]
-    // async fn the_real_deal() {
-    //     let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
-    //     let addr = listener.local_addr().unwrap();
+    #[tokio::test]
+    async fn the_real_deal() {
+        let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
 
-    //     tokio::spawn(async move {
-    //         axum::serve(listener, app()).await.unwrap();
-    //     });
+        tokio::spawn(async move {
+            axum::serve(listener, api::app()).await.unwrap();
+        });
 
-    //     let client =
-    //         hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-    //             .build_http();
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build_http();
 
-    //     let response = client
-    //         .request(
-    //             Request::builder()
-    //                 .uri(format!("http://{addr}"))
-    //                 .header("Host", "localhost")
-    //                 .body(Body::empty())
-    //                 .unwrap(),
-    //         )
-    //         .await
-    //         .unwrap();
+        let response = client
+            .request(
+                Request::builder()
+                    .uri(format!("http://{addr}/todos"))
+                    .header("Host", "localhost")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-    //     let body = response.into_body().collect().await.unwrap().to_bytes();
-    //     assert_eq!(&body[..], b"Hello, World!");
-    // }
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"[]");
+    }
 
     // You can use `ready()` and `call()` to avoid using `clone()`
     // in multiple request
@@ -396,17 +456,17 @@ mod tests {
     // That is normally set with `Router::into_make_service_with_connect_info` but we can't easily
     // use that during tests. The solution is instead to set the `MockConnectInfo` layer during
     // tests.
-    // #[tokio::test]
-    // async fn with_into_make_service_with_connect_info() {
-    //     let mut app = app()
-    //         .layer(MockConnectInfo(SocketAddr::from(([0, 0, 0, 0], 3000))))
-    //         .into_service();
+    #[tokio::test]
+    async fn with_into_make_service_with_connect_info() {
+        let mut app = api::app()
+            .layer(MockConnectInfo(SocketAddr::from(([0, 0, 0, 0], 3000))))
+            .into_service();
 
-    //     let request = Request::builder()
-    //         .uri("/requires-connect-info")
-    //         .body(Body::empty())
-    //         .unwrap();
-    //     let response = app.ready().await.unwrap().call(request).await.unwrap();
-    //     assert_eq!(response.status(), StatusCode::OK);
-    // }
+        let request = Request::builder()
+            .uri("/requires-connect-info")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }

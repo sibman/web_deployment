@@ -1,8 +1,7 @@
-use axum::{routing::get, body::Body, http::{Response, StatusCode}, Router, extract::{Path, Query, State},};
+use axum::{routing::get, body::Body, http::{Response, StatusCode}, Router,};
 use std::{sync::{Arc, Mutex}, collections::HashMap};
 use axum::response::IntoResponse;
 use serde_json::json;
-use serde::Serialize;
 use std::fmt::Debug;
 
 // Define a trait for health checkers

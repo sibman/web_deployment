@@ -1,3 +1,4 @@
+pub mod api {
 use axum::{routing::get, body::Body, http::{Response, StatusCode}, Router,};
 use std::{sync::{Arc, Mutex}, collections::HashMap};
 use axum::response::IntoResponse;
@@ -29,10 +30,6 @@ impl Actuator {
         health_checkers.insert(name, checker);
     }
 
-    pub fn get_health_checkers(&self) -> &Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>> {
-        &self.health_checkers
-    }
-
     // Generate the actuator router
     pub fn router(&self, router: Router) -> Router {
         let health_checkers_readiness = self.health_checkers.clone();
@@ -59,7 +56,7 @@ impl Actuator {
 // Handler for /actuator/info endpoint
 async fn info_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
     let is_ready = check_all_health(health_checkers.clone(), |checker| checker.is_ready()).await;
-    let is_alive = check_all_health(health_checkers.clone(), |checker| checker.is_alive()).await;
+    let is_alive = check_all_health(health_checkers, |checker| checker.is_alive()).await;
 
     Response::builder()
         .status(if is_ready && is_alive { StatusCode::OK } else { StatusCode::CONFLICT })
@@ -71,7 +68,7 @@ async fn info_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthC
 // Placeholder health handler function
 async fn health_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
     let is_ready = check_all_health(health_checkers.clone(), |checker| checker.is_ready()).await;
-    let is_alive = check_all_health(health_checkers.clone(), |checker| checker.is_alive()).await;
+    let is_alive = check_all_health(health_checkers, |checker| checker.is_alive()).await;
 
     let status = if is_ready && is_alive {
         "UP"
@@ -88,7 +85,7 @@ async fn health_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn Healt
 
 // Handler for /actuator/health/readiness endpoint
 async fn readiness_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
-    let is_ready = check_all_health(health_checkers.clone(), |checker| checker.is_ready()).await;
+    let is_ready = check_all_health(health_checkers, |checker| checker.is_ready()).await;
 
     Response::builder()
         .status(if is_ready { StatusCode::OK } else { StatusCode::CONFLICT })
@@ -99,7 +96,7 @@ async fn readiness_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn He
 
 // Handler for /actuator/health/liveness endpoint
 async fn liveness_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
-    let is_alive = check_all_health(health_checkers.clone(), |checker| checker.is_alive()).await;
+    let is_alive = check_all_health(health_checkers, |checker| checker.is_alive()).await;
 
     Response::builder()
         .status(if is_alive { StatusCode::OK } else { StatusCode::CONFLICT })
@@ -122,6 +119,7 @@ where
         }
     }
     is_health
+}
 }
 
 // Example health check function
@@ -146,3 +144,153 @@ where
 //     //     .await
 //     //     .unwrap();
 // }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        extract::connect_info::MockConnectInfo,
+        http::{self, Request, StatusCode},
+    };
+    use http_body_util::BodyExt; // for `collect`
+    use serde_json::{json, Value};
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
+    use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
+    use http::Method;
+    use std::{sync::{Arc, Mutex}, collections::HashMap};
+    use api::HealthChecker;
+    use axum::extract::ConnectInfo;
+    use axum::routing::get;
+    use axum::Json;
+    use axum::routing::post;
+    use axum::Router;
+
+    pub fn app() -> Router {
+        // Compose the routes
+        Router::new()
+            .route(
+                "/json",
+                post(|payload: Json<serde_json::Value>| async move {
+                    Json(serde_json::json!({ "data": payload.0 }))
+                }),
+            )
+            .route(
+                "/requires-connect-info",
+                get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move { format!("Hi {addr}") }),
+            )
+            // Add middleware to all routes
+            // .layer(
+            // )
+    }
+
+    #[tokio::test]
+    async fn json() {
+        let app = app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/json")
+                    .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+                    .body(Body::from(
+                        serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body, json!({ "data": [1, 2, 3, 4] }));
+    }
+
+    // Here we're calling `/requires-connect-info` which requires `ConnectInfo`
+    //
+    // That is normally set with `Router::into_make_service_with_connect_info` but we can't easily
+    // use that during tests. The solution is instead to set the `MockConnectInfo` layer during
+    // tests.
+    #[tokio::test]
+    async fn with_into_make_service_with_connect_info() {
+        let mut app = app()
+            .layer(MockConnectInfo(SocketAddr::from(([0, 0, 0, 0], 3000))))
+            .into_service();
+
+        let request = Request::builder()
+            .uri("/requires-connect-info")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[derive(Debug)]
+    struct DatabaseHealthCheck{
+        ready: bool,
+        alive: bool
+    }
+    
+    impl HealthChecker for DatabaseHealthCheck {
+        fn is_ready(&self) -> bool {
+            self.ready
+        }
+
+        fn is_alive(&self) -> bool {
+            self.alive
+        }
+    }
+
+    #[tokio::test]
+    async fn inject_actuator() {
+        let mut app = app();
+        // Create a new Actuator instance
+        let mut actuator = api::Actuator::new();
+
+        // Add health checkers
+        actuator.add_health_checker("database".to_string(), Arc::new(Mutex::new(DatabaseHealthCheck{ready: true, alive: true})));
+
+        // Generate the actuator router
+        let mut app = actuator.router(app)     
+            .into_service();
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/actuator/health")
+            .body(Body::empty())
+            .unwrap();
+        
+        let response = app.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/actuator/info")
+            .body(Body::empty())
+            .unwrap();
+        
+        let response = app.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/actuator/health/liveness")
+            .body(Body::empty())
+            .unwrap();
+        
+        let response = app.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/actuator/health/readiness")
+            .body(Body::empty())
+            .unwrap();
+        
+        let response = app.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}

@@ -30,14 +30,15 @@ pub mod api {
     };
     use tower::{BoxError, ServiceBuilder};
     use tower_http::trace::TraceLayer;
-    
+
+    use axum::extract::ConnectInfo;
+    use serde_json::json;
+    use std::net::SocketAddr;
     use utoipa::OpenApi;
     use utoipa::ToSchema;
     use utoipa_swagger_ui::SwaggerUi;
     use uuid::Uuid;
-    use std::net::SocketAddr;
-    use axum::extract::ConnectInfo;
-    
+
     #[derive(OpenApi)]
     #[openapi(
         paths(todos_index, todos_create, todos_update, todos_delete),
@@ -226,22 +227,33 @@ pub mod api {
     }
 
     async fn actuator_info() -> impl IntoResponse {
-        let info_resp = "";
-        Json(info_resp)
+        StatusCode::OK
     }
 
     async fn actuator_health() -> impl IntoResponse {
-        let health_resp = if is_healthy() { "{\"status\": \"UP\"}" } else {"{\"status\": \"DOWN\"}"};
+        let health_resp = if is_healthy() {
+            json!({"status": "UP"})
+        } else {
+            json!({"status": "DOWN"})
+        };
         Json(health_resp)
     }
 
     async fn actuator_health_liveness() -> impl IntoResponse {
-        let liveness_resp = if is_liveness() { "{\"status\": \"UP\"}" } else {"{\"status\": \"DOWN\"}"};
+        let liveness_resp = if is_liveness() {
+            json!({"status": "UP"})
+        } else {
+            json!({"status": "DOWN"})
+        };
         Json(liveness_resp)
     }
 
     async fn actuator_health_readiness() -> impl IntoResponse {
-        let readiness_resp = if is_readiness() { "{\"status\": \"UP\"}" } else {"{\"status\": \"DOWN\"}"};
+        let readiness_resp = if is_readiness() {
+            json!({"status": "UP"})
+        } else {
+            json!({"status": "DOWN"})
+        };
         Json(readiness_resp)
     }
 
@@ -277,11 +289,9 @@ mod tests {
     };
     use http_body_util::BodyExt; // for `collect`
     use serde_json::{json, Value};
+    use std::net::SocketAddr;
     use tokio::net::TcpListener;
     use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
-    use axum::routing::post;
-    use axum::extract::ConnectInfo;
-    use std::net::SocketAddr;
 
     #[tokio::test]
     async fn todos_get() {
@@ -312,7 +322,8 @@ mod tests {
 
         // `Router` implements `tower::Service<Request<Body>>` so we can
         // call it like any tower service, no need to run an HTTP server.
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method(http::Method::GET)
@@ -328,7 +339,8 @@ mod tests {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"[]");
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method(http::Method::GET)
@@ -470,3 +482,4 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 }
+

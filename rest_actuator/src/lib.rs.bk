@@ -1,0 +1,122 @@
+use axum::{handler::get, Router};
+use axum::response::IntoResponse;
+use axum::http::{StatusCode, Response};
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use serde_json::json;
+
+// Define a trait for health checkers
+pub trait HealthChecker: Send + Sync {
+    fn is_ready(&self) -> bool;
+    fn is_alive(&self) -> bool;
+}
+
+// Example health check function
+pub fn database_health_check() -> bool {
+    // Perform database health check here
+    true
+}
+
+// Implementation of HealthChecker trait for the database health check function
+impl HealthChecker for fn() -> bool {
+    fn is_ready(&self) -> bool {
+        (*self)()
+    }
+    
+    fn is_alive(&self) -> bool {
+        (*self)()
+    }
+}
+
+// Placeholder health handler function
+async fn health_handler(_: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
+    Response::new("Health endpoint placeholder")
+}
+
+// Struct to encapsulate actuator routes and health checkers
+pub struct Actuator {
+    health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>,
+}
+
+impl Actuator {
+    // Create a new Actuator instance
+    pub fn new() -> Self {
+        Self {
+            health_checkers: Arc::new(HashMap::new()),
+        }
+    }
+
+    // Add a health checker
+    pub fn add_health_checker<F>(&mut self, name: &str, checker: F)
+    where
+        F: HealthChecker + 'static,
+    {
+        self.health_checkers.insert(name.to_string(), Arc::new(Mutex::new(Arc::new(checker) as Arc<dyn HealthChecker>)));
+    }
+
+    // Generate the actuator router
+    pub fn router(&self) -> Router {
+        let health_checkers = Arc::clone(&self.health_checkers);
+
+        // Create a router with /actuator/health/readiness, /actuator/health/liveness, /actuator/info, and /actuator/health endpoints
+        Router::new()
+            .route("/actuator/health/readiness", get(move |_| readiness_handler(Arc::clone(&health_checkers))))
+            .route("/actuator/health/liveness", get(move |_| liveness_handler(Arc::clone(&health_checkers))))
+            .route("/actuator/info", get(move |_| info_handler(Arc::clone(&health_checkers))))
+            .route("/actuator/health", get(move |_| health_handler(Arc::clone(&health_checkers))))
+    }
+}
+
+// Handler for /actuator/health/readiness endpoint
+async fn readiness_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
+    let is_ready = check_all_health(&health_checkers, |checker| checker.is_ready()).await;
+    Response::builder()
+        .status(if is_ready { StatusCode::OK } else { StatusCode::CONFLICT })
+        .header("Content-Type", "application/json")
+        .body(json!({ "status": if is_ready { "UP" } else { "DOWN" } }).to_string())
+        .unwrap()
+}
+
+// Handler for /actuator/health/liveness endpoint
+async fn liveness_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
+    let is_alive = check_all_health(&health_checkers, |checker| checker.is_alive()).await;
+    Response::builder()
+        .status(if is_alive { StatusCode::OK } else { StatusCode::CONFLICT })
+        .header("Content-Type", "application/json")
+        .body(json!({ "status": if is_alive { "UP" } else { "DOWN" } }).to_string())
+        .unwrap()
+}
+
+// Handler for /actuator/info endpoint
+async fn info_handler(health_checkers: Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>) -> impl IntoResponse {
+    let is_ready = check_all_health(&health_checkers, |checker| checker.is_ready()).await;
+    let is_alive = check_all_health(&health_checkers, |checker| checker.is_alive()).await;
+
+    let status = if is_ready && is_alive {
+        "UP"
+    } else {
+        "DOWN"
+    };
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(json!({ "status": status }).to_string())
+        .unwrap()
+}
+
+// Helper function to check all health checkers
+async fn check_all_health<F>(health_checkers: &Arc<HashMap<String, Arc<Mutex<dyn HealthChecker>>>>, check_fn: F) -> bool
+where
+    F: Fn(&dyn HealthChecker) -> bool,
+{
+    let mut is_health = true;
+    for (_, checker) in health_checkers.iter() {
+        let checker = checker.lock().unwrap();
+        if !check_fn(&*checker) {
+            is_health = false;
+            break;
+        }
+    }
+    is_health
+}

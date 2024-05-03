@@ -1,0 +1,85 @@
+use std::collections::HashMap;
+
+#[derive(Clone)] // Allow cloning for sharing
+struct SharedState {
+    data: HashMap<String, String>, // Replace String with your actual data type
+}
+
+impl SharedState {
+    fn new() -> Self {
+        Self {
+            data: HashMap::new(),
+        }
+    }
+
+    // Methods to update the state (implement as needed)
+    fn update(&mut self, key: &str, value: &str) {
+        self.data.insert(key.to_owned(), value.to_owned());
+    }
+
+    // Method to get a specific value (assuming your data type is String)
+    fn get(&self, key: &str) -> Option<&String> {
+        self.data.get(key)
+    }
+}
+
+use std::sync::Mutex;
+
+static SHARED_STATE: Mutex<SharedState> = Mutex::new(SharedState::new());
+
+
+use std::thread;
+
+fn update_state() {
+    let mut state = SHARED_STATE.lock().unwrap(); // Acquire lock for update
+    state.update("key1", "value1");
+    state.update("key2", "value2");
+    // ... update other values
+}
+
+fn main() {
+    // ... other code
+
+    thread::spawn(|| {
+        update_state();
+    });
+
+    // ... other code (main thread continues)
+}
+
+use axum::extract::Extension;
+
+async fn my_handler(Extension(state): Extension<Mutex<SharedState>>) -> String {
+    let state = state.lock().unwrap(); // Acquire lock for read access
+    let value = state.get("key1").unwrap_or(&"default_value"); // Handle missing key
+    format!("Retrieved value: {}", value)
+}
+
+
+use axum::{
+    Router,
+    http::{StatusCode},
+    response::IntoResponse,
+    extract::{Extension},
+};
+use tower_service::Service;
+
+// ... previous code (SharedState, update_state)
+
+async fn run_server() -> Result<(), std::io::Error> {
+    let app = Router::new()
+        .route("/", get(|| async { "Hello, world!" }))
+        .route("/data", get(my_handler))
+        .layer(Extension(SHARED_STATE.clone())); // Make state available to all handlers
+
+    axum::Server::bind(&"0.0.0.0:3000")
+        .serve(app.into_make_service())
+        .await
+}
+
+fn main() {
+    let _ = run_server();
+}
+
+
+

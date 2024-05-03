@@ -1,0 +1,83 @@
+trait MyFunction {
+    fn call(&self) -> bool;
+}
+
+impl<F> MyFunction for F where F: Fn() -> bool {
+    fn call(&self) -> bool {
+        (self)()
+    }
+}
+
+use std::sync::Arc;
+use std::sync::Mutex;
+
+struct SharedState {
+    functions: Arc<Mutex<Vec<Box<dyn MyFunction>>>>,
+}
+
+impl SharedState {
+    fn new() -> Self {
+        Self {
+            functions: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn register_function(&mut self, f: impl MyFunction) {
+        let mut lock = self.functions.lock().unwrap();
+        lock.push(Box::new(f));
+    }
+}
+
+
+let mut state = SharedState::new();
+state.register_function(|| {
+    // Function 1 logic here
+    true
+});
+state.register_function(|| {
+    // Function 2 logic here
+    false
+});
+
+
+use axum::extract::Extension;
+
+async fn my_handler(Extension(state): Extension<Arc<Mutex<SharedState>>>) -> String {
+    let mut results = Vec::new();
+    for f in state.lock().unwrap().functions.iter() {
+        results.push(f.call());
+    }
+
+    let mut result_str = String::new();
+    for result in results {
+        result_str.push_str(&format!("Function Result: {}", result));
+    }
+
+    format!("{}", result_str)
+}
+
+
+use axum::{
+    Router,
+    http::{StatusCode},
+    response::IntoResponse,
+    extract::{Extension},
+};
+use tower_service::Service;
+
+// ... previous code (MyFunction, SharedState)
+
+async fn run_server() -> Result<(), std::io::Error> {
+    let app = Router::new()
+        .route("/", get(my_handler))
+        .layer(Extension(Arc::new(SharedState::new()))); // Make state available
+
+    axum::Server::bind(&"0.0.0.0:3000")
+        .serve(app.into_make_service())
+        .await
+}
+
+fn main() {
+    let _ = run_server();
+}
+

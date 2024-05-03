@@ -18,23 +18,8 @@ pub mod api {
     use std::sync::MutexGuard;
     use std::ops::DerefMut;
     use axum::extract::Extension;
-
-    // Define a trait for health checkers
-    pub trait StateChecker: Send + Sync + Debug {
-        fn is_ready(&self) -> bool;
-        fn is_alive(&self) -> bool;
-    }
-
-    type ActuatorStateDb = Arc<HashMap<String, Arc<Mutex<Box<dyn StateChecker>>>>>;
-    //type HandlerFn = fn(state: &ActuatorStateDb) -> Result<Response<String>, Box<dyn std::error::Error>>;
-
-    pub trait ActuatorRouter: Send + Sync + Debug {
-        fn register_routes_with_extention(
-            //self: &Self, 
-            router: Router, 
-            //handler_map: HashMap<String, HandlerFn>,
-            extention: Option<Extension<ActuatorState>>) -> Router;
-    } 
+    use std::time::Duration;
+    use tokio::sync::broadcast;
 
     //Handler for /actuator/info endpoint
     async fn info_handler(Extension(state): Extension<ActuatorState>) -> impl IntoResponse {
@@ -106,29 +91,101 @@ pub mod api {
         is_health
     }
 
+    // Define a trait for health checkers
+    pub trait StateChecker: Send + Sync + Debug {
+        fn is_ready(&self) -> bool;
+        fn is_alive(&self) -> bool;
+    }
+
+    type ActuatorStateDb = Arc<HashMap<String, Arc<Mutex<Box<dyn StateChecker>>>>>;
+    //type HandlerFn = fn(state: &ActuatorStateDb) -> Result<Response<String>, Box<dyn std::error::Error>>;
+
+    pub trait ActuatorRouter: Send + Sync + Debug {
+        fn register_routes_with_extention(
+            //self: &Self, 
+            router: Router, 
+            //handler_map: HashMap<String, HandlerFn>,
+            extention: Option<Extension<ActuatorState>>) -> Router;
+    } 
+
     // ActuatorState struct to manage health checkers and routes
+    //#[derive(Debug, Default, Clone)]
     #[derive(Debug, Default, Clone)]
     pub struct ActuatorState {
-        health_checkers: ActuatorStateDb, // Arc<HashMap<String, Arc<Mutex<dyn StateChecker>>>>,
+        health_checkers: ActuatorStateDb,
+        //state_check_sender: broadcast::Sender<()>,
+        //state_check_receiver: Arc<Mutex<broadcast::Receiver<()>>>,
+        is_ready: bool,
+        is_alive: bool,
+        is_health: bool,
     }
 
     impl ActuatorState {
         // Create a new ActuatorState instance
         pub fn new() -> Self {
-            Self {
+            //let (state_check_sender, receiver) = broadcast::channel::<()>(1);
+            //let receiver_arc = Arc::new(Mutex::new(receiver));
+
+            let state = Self {
                 health_checkers: Arc::new(HashMap::new()),
+                //state_check_sender,
+                //state_check_receiver: receiver_arc.clone(),
+                is_ready: true,
+                is_alive: true,
+                is_health: true,
+            };
+
+            let mut state_clone = state.clone();
+            tokio::spawn(async move {
+                state_clone.state_check_loop().await;
+            });
+
+            state
+        }
+
+        async fn state_check_loop(&mut self) {
+            let mut interval = tokio::time::interval(Duration::from_secs(10));
+    
+            loop {
+                interval.tick().await;
+                self.check_all_health().await;
+            }
+        }
+    
+        async fn check_all_health(&mut self) {
+            let mut new_check = true;
+            for (_, checker) in self.health_checkers.iter() {
+                let checker = checker.lock().unwrap();
+                let is_ready = checker.is_ready();
+                let is_alive = checker.is_alive();
+    
+                if new_check && !is_ready {
+                    self.is_ready = is_ready;
+                    self.is_health = is_ready;
+                } else if !is_ready && is_ready != self.is_ready {
+                    self.is_ready = is_ready;
+                }
+                if new_check && !is_alive {
+                    self.is_alive = is_alive;
+                    self.is_health = is_alive;
+                } else if !is_alive && is_alive != self.is_alive {
+                    self.is_alive = is_alive;
+                }
+                if !self.is_health {
+                    new_check = false;
+                }
             }
         }
 
+        // Trigger state check manually
+        // pub fn trigger_state_check(&self) {
+        //     let _ = self.state_check_sender.send(());
+        // }
+
         // Add a health checker
         pub fn add_health_checker(&mut self, name: String, checker: Arc<Mutex<Box<dyn StateChecker>>>) {
-            let health_checkers = Arc::get_mut(&mut self.health_checkers).unwrap();
+            let mut health_checkers = Arc::get_mut(&mut self.health_checkers).unwrap();
             health_checkers.insert(name, checker);
-        }
-
-        // Get a mutable reference to the health_checkers
-        pub fn get_mut_health_checkers(&mut self) -> &mut ActuatorStateDb {
-            &mut self.health_checkers
         }
     }
 
@@ -283,10 +340,10 @@ mod tests {
     #[tokio::test]
     async fn test_actuator() {
         let _app = app();
-        let mut actuator = api::ActuatorState::new();
+        let mut actuator_state = api::ActuatorState::new();
                 
         // Add health checkers
-        actuator.add_health_checker(
+        actuator_state.add_health_checker(
             "database".to_string(),
             Arc::new(Mutex::new(Box::new(DatabaseHealthCheck {
                 ready: true,
@@ -298,7 +355,7 @@ mod tests {
         //let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator));
         //let app = ActuatorRouterBuilder::register_routes_with_extention(_app, extention);
 
-        actuator.add_health_checker(
+        actuator_state.add_health_checker(
             "database".to_string(),
             Arc::new(Mutex::new(Box::new(DatabaseHealthCheck {
                 ready: false,
@@ -310,7 +367,7 @@ mod tests {
 
         //let _app = actuator.route(_app);
 
-        actuator.add_health_checker(
+        actuator_state.add_health_checker(
             "database".to_string(),
             Arc::new(Mutex::new(Box::new(DatabaseHealthCheck {
                 ready: true,
@@ -325,10 +382,10 @@ mod tests {
     async fn inject_actuator() {
         let app = app();
         // Create a new ActuatorState instance
-        let mut actuatorState = api::ActuatorState::new();
+        let mut actuator_state = api::ActuatorState::new();
         
         // Add health checkers
-        actuatorState.add_health_checker(
+        actuator_state.add_health_checker(
             "database".to_string(),
             Arc::new(Mutex::new(Box::new(DatabaseHealthCheck {
                 ready: true,
@@ -337,7 +394,7 @@ mod tests {
         );
 
         // Generate the actuator router
-        let extention: Option<Extension<ActuatorState>> = Some(Extension(actuatorState));
+        let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
         let mut app = ActuatorRouterBuilder::register_routes_with_extention(app, extention).into_service();
 
         let request = Request::builder()

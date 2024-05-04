@@ -38,6 +38,13 @@ pub mod api {
     use utoipa::ToSchema;
     use utoipa_swagger_ui::SwaggerUi;
     use uuid::Uuid;
+    use rest_actuator::api::{
+        ActuatorState,
+        StateChecker,
+        ActuatorRouterBuilder,
+    };
+    use std::sync::Mutex;
+    use axum::Extension;
 
     #[derive(OpenApi)]
     #[openapi(
@@ -46,11 +53,48 @@ pub mod api {
     )]
     struct ApiDoc;
 
+    #[derive(Debug)]
+    struct DatabaseHealthCheck {
+        ready: bool,
+        alive: bool,
+    }
+
+    impl StateChecker for DatabaseHealthCheck {
+        fn is_ready(&self) -> bool {
+            self.ready
+        }
+
+        fn is_alive(&self) -> bool {
+            self.alive
+        }
+    }
+
     pub fn app() -> Router {
         let db = Db::default();
 
+        let mut actuator_state = ActuatorState::new();
+
+        // Add health checkers
+        actuator_state.add_health_checker(
+            "database".to_string(),
+            Arc::new(Mutex::new(Box::new(DatabaseHealthCheck {
+                ready: true,
+                alive: true,
+            }))),
+        );
+
+        let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
+        
+        let mut router = ActuatorRouterBuilder::new(Router::new())
+            .with_readiness_route()
+            .with_liveness_route()
+            .with_info_route()
+            .with_health_route()
+            .with_layer(extention)
+            .build();
+
         // Compose the routes
-        Router::new()
+        router
             .route("/todos", get(todos_index).post(todos_create))
             .route(
                 "/todos/:id",
@@ -66,10 +110,6 @@ pub mod api {
                 "/requires-connect-info",
                 get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move { format!("Hi {addr}") }),
             )
-            .route("/actuator/health", get(actuator_health))
-            .route("/actuator/info", get(actuator_info))
-            .route("/actuator/health/liveness", get(actuator_health_liveness))
-            .route("/actuator/health/readiness", get(actuator_health_readiness))
             .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
             // Add middleware to all routes
             .layer(
@@ -224,49 +264,6 @@ pub mod api {
         } else {
             StatusCode::NOT_FOUND
         }
-    }
-
-    async fn actuator_info() -> impl IntoResponse {
-        StatusCode::OK
-    }
-
-    async fn actuator_health() -> impl IntoResponse {
-        let health_resp = if is_healthy() {
-            json!({"status": "UP"})
-        } else {
-            json!({"status": "DOWN"})
-        };
-        Json(health_resp)
-    }
-
-    async fn actuator_health_liveness() -> impl IntoResponse {
-        let liveness_resp = if is_liveness() {
-            json!({"status": "UP"})
-        } else {
-            json!({"status": "DOWN"})
-        };
-        Json(liveness_resp)
-    }
-
-    async fn actuator_health_readiness() -> impl IntoResponse {
-        let readiness_resp = if is_readiness() {
-            json!({"status": "UP"})
-        } else {
-            json!({"status": "DOWN"})
-        };
-        Json(readiness_resp)
-    }
-
-    fn is_healthy() -> bool {
-        true
-    }
-
-    fn is_liveness() -> bool {
-        true
-    }
-
-    fn is_readiness() -> bool {
-        true
     }
 
     type Db = Arc<RwLock<HashMap<Uuid, Todo>>>;

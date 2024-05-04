@@ -4,7 +4,7 @@ pub mod api {
     use axum::{
         body::Body,
         http::{Response, StatusCode},
-        routing::{get, MethodRouter},
+        routing::{get},
         Router,
         handler::Handler,
     };
@@ -16,34 +16,7 @@ pub mod api {
         sync::{Arc, Mutex},
     };
     use tokio::sync::broadcast;
-    use std::future::Future;
-    use axum::extract::Request;
-
-    // pub struct HandlerWrapper<F, S>
-    // where
-    //     F: Fn(Extension<S>) -> impl IntoResponse,
-    //     S: Clone + Send + Sync + 'static,
-    // {
-    //     state: S,
-    //     handler: F,
-    // }
-
-    // impl<F, S> Handler<(), Extension<S>> for HandlerWrapper<F, S>
-    // where
-    //     F: Fn(Extension<S>) -> impl IntoResponse  + Clone + Send + Sized + 'static,
-    //     S: Clone + Send + Sync + 'static,
-    // {
-    //     type Future = axum::response::BoxFuture<Response>;
-
-    //     fn call(&self, _req: Request<()>, state: Extension<S>) -> Self::Future {
-    //         let state = state.clone();
-    //         let handler = self.handler.clone();
-    //         Box::pin(async move {
-    //             (handler)(Extension(state)).await.into_response()
-    //         })
-    //     }
-    // }
-
+    
     //Handler for /actuator/info endpoint
     pub async fn info_handler(Extension(state): Extension<ActuatorState>) -> impl IntoResponse {
         let is_ready = state.is_ready && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
@@ -129,15 +102,6 @@ pub mod api {
     }
 
     type ActuatorStateDb = Arc<HashMap<String, Arc<Mutex<Box<dyn StateChecker>>>>>;
-    //type HandlerFn = fn(state: &ActuatorStateDb) -> Result<Response<String>, Box<dyn std::error::Error>>; //TODO: add the ability to add handlers dynamically
-
-    // pub trait ActuatorRouter: Send + Sync + Debug {
-    //     fn register_routes_with_extention(
-    //         router: Router,
-    //         //handler_map: HashMap<String, HandlerFn>, //TODO: add the ability to add handlers dynamically
-    //         extention: Option<Extension<ActuatorState>>,
-    //     ) -> Router;
-    // }
 
     // ActuatorState struct to manage health checkers and routes
     #[derive(Debug, Clone)]
@@ -246,30 +210,6 @@ pub mod api {
         }
     }
 
-    // #[derive(Debug)]
-    // pub struct ActuatorRouterBuilder;
-    // impl ActuatorRouter for ActuatorRouterBuilder {
-    //     // Generate the actuator router
-    //     fn register_routes_with_extention(
-    //         router: Router,
-    //         //handler_map: HashMap<String, HandlerFn>,
-    //         extention: Option<Extension<ActuatorState>>,
-    //     ) -> Router {
-    //         // Create a router with /actuator/health/readiness, /actuator/health/liveness, /actuator/info, and /actuator/health endpoints
-    //         let mut router = router
-    //             .route("/actuator/health/readiness", get(readiness_handler))
-    //             .route("/actuator/health/liveness", get(liveness_handler))
-    //             .route("/actuator/info", get(info_handler))
-    //             .route("/actuator/health", get(health_handler)); // Call the health_handler method within the closure
-
-    //         if let Some(extention) = extention {
-    //             router = router.layer(extention);
-    //         }
-
-    //         router
-    //     }
-    // }
-
     #[derive(Debug)]
     pub struct ActuatorRouterBuilder {
         router: Router,
@@ -322,24 +262,6 @@ pub mod api {
             self.router
         }
     }
-
-
-    // impl ActuatorRouter for ActuatorState {
-    //     fn register_routes_with_extention(
-    //         self: &Self,
-    //         router: Router,
-    //         handler_map: HashMap<String, HandlerFn>,
-    //         extention: Option<Extension<ActuatorStateDb>>) -> Router {
-    //         let mut router = router;
-    //         for (route, handler) in handler_map.iter() {
-    //             router = router.route(route, get(handler));
-    //         }
-    //         if let Some(extention) = extention {
-    //             router = router.layer(extention);
-    //         }
-    //         router
-    //     }
-    // }
 }
 
 #[cfg(test)]
@@ -357,7 +279,7 @@ mod tests {
     use serde_json::{json, Value};
     use std::net::SocketAddr;
 
-    use api::{ActuatorRouterBuilder, ActuatorState, StateChecker}; //ActuatorRouter, 
+    use api::{ActuatorRouterBuilder, ActuatorState, StateChecker}; 
     use http::Method;
     use std::sync::{Arc, Mutex};
     use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
@@ -375,9 +297,6 @@ mod tests {
                 "/requires-connect-info",
                 get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move { format!("Hi {addr}") }),
             )
-        // Add middleware to all routes
-        // .layer(
-        // )
     }
 
     #[tokio::test]
@@ -455,8 +374,6 @@ mod tests {
         );
 
         println!("{:?}", actuator_state);
-        //let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
-        //let app = ActuatorRouterBuilder::register_routes_with_extention(_app, extention);
 
         actuator_state.add_health_checker(
             "database".to_string(),
@@ -541,6 +458,7 @@ mod tests {
         let response = app.ready().await.unwrap().call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
+        //TODO: Figure out howto test state chages, consider mockup
         // Add health checkers
         // actuator.add_health_checker("database".to_string(), Arc::new(Mutex::new(DatabaseHealthCheck{ready: false, alive: false})));
 

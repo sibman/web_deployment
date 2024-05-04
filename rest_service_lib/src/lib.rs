@@ -32,7 +32,6 @@ pub mod api {
     use tower_http::trace::TraceLayer;
 
     use axum::extract::ConnectInfo;
-    use serde_json::json;
     use std::net::SocketAddr;
     use utoipa::OpenApi;
     use utoipa::ToSchema;
@@ -85,7 +84,7 @@ pub mod api {
 
         let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
         
-        let mut router = ActuatorRouterBuilder::new(Router::new())
+        let router = ActuatorRouterBuilder::new(Router::new())
             .with_readiness_route()
             .with_liveness_route()
             .with_info_route()

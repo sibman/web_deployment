@@ -32,18 +32,14 @@ pub mod api {
     use tower_http::trace::TraceLayer;
 
     use axum::extract::ConnectInfo;
+    use axum::Extension;
+    use rest_actuator::api::{ActuatorRouterBuilder, ActuatorState, StateChecker};
     use std::net::SocketAddr;
+    use std::sync::Mutex;
     use utoipa::OpenApi;
     use utoipa::ToSchema;
     use utoipa_swagger_ui::SwaggerUi;
     use uuid::Uuid;
-    use rest_actuator::api::{
-        ActuatorState,
-        StateChecker,
-        ActuatorRouterBuilder,
-    };
-    use std::sync::Mutex;
-    use axum::Extension;
 
     #[derive(OpenApi)]
     #[openapi(
@@ -82,14 +78,14 @@ pub mod api {
             }))),
         );
 
-        let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
-        
+        let extension: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
+
         let router = ActuatorRouterBuilder::new(Router::new())
             .with_readiness_route()
             .with_liveness_route()
             .with_info_route()
             .with_health_route()
-            .with_layer(extention)
+            .with_layer(extension)
             .build();
 
         // Compose the routes
@@ -144,10 +140,10 @@ pub mod api {
     get,
     path = "/todos",
     responses(
-        (status = 200, description = "Todos found succesfully", body = [Todo])
+        (status = 200, description = "Todos found successfully", body = [Todo])
     ),
     params(
-        ("pagination" = Option<Pagination>, Query, description = "Todo database pagination to retrieve by ofset and limit"),
+        ("pagination" = Option<Pagination>, Query, description = "Todo database pagination to retrieve by offset and limit"),
     )
     )]
     async fn todos_index(
@@ -175,12 +171,12 @@ pub mod api {
 
     /// Create todo
     ///
-    /// Cteate todo in database with auto genearate uuid v4
+    /// Create todo in database with auto generate uuid v4
     #[utoipa::path(
     post,
     path = "/todos",
     responses(
-        (status = 201, description = "Create todo succesfully", body = Todo)
+        (status = 201, description = "Create todo successfully", body = Todo)
     )
     )]
     async fn todos_create(
@@ -211,8 +207,8 @@ pub mod api {
     put,
     path = "/todos/{id}",
     responses(
-        (status = 200, description = "Todo updated succesfully", body = Todo),
-        (status = NOT_FOUND, description = "Todod was not found")
+        (status = 200, description = "Todo updated successfully", body = Todo),
+        (status = NOT_FOUND, description = "Todo was not found")
     ),
     params(
         ("id" = Path<Uuid>, Path, description = "Todo database id to update Todo for"),
@@ -250,7 +246,7 @@ pub mod api {
     delete,
     path = "/todos/{id}",
     responses(
-        (status = NO_CONTENT, description = "Todo deleted succesfully"),
+        (status = NO_CONTENT, description = "Todo deleted successfully"),
         (status = NOT_FOUND, description = "Todo was not found")
     ),
     params(
@@ -478,4 +474,3 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 }
-

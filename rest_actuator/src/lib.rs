@@ -6,7 +6,6 @@ pub mod api {
         http::{Response, StatusCode},
         routing::{get},
         Router,
-        handler::Handler,
     };
     use serde_json::json;
     use std::fmt::Debug;

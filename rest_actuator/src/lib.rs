@@ -210,12 +210,12 @@ pub mod api {
     }
 
     #[derive(Debug)]
-    pub struct ActuatorRouterBuilder {
-        router: Router,
+    pub struct ActuatorRouterBuilder<RT> {
+        router: Router<RT>,
     }
 
-    impl ActuatorRouterBuilder {
-        pub fn new(router: Router) -> Self {
+    impl<RT: Clone + Send + Sync + 'static> ActuatorRouterBuilder<RT> {
+        pub fn new(router: Router<RT>) -> Self {
             Self {
                 router,
             }
@@ -257,7 +257,7 @@ pub mod api {
             self
         }
 
-        pub fn build(self) -> Router {
+        pub fn build(self) -> Router<RT> {
             self.router
         }
     }

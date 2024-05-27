@@ -20,3 +20,7 @@ tokio = { version = "1.0", features = ["io-std", "macros", "io-util"] }
 mime = "0.3"
 tower = { version = "0.4", features = ["util", "timeout"] }
 http-body-util = "0.1.0"
+
+[lib]
+name = "rest_actuator"
+path = "src/lib.rs"

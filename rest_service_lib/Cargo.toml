@@ -5,19 +5,65 @@ edition = "2021"
 
 [dependencies]
 rest_actuator = { path = "../rest_actuator" }
-axum = "0.7.5"
+axum = { version = "0.7.5", features = [
+  "multipart",
+  "macros",
+  "http2",
+  "ws",
+  "__private_docs",
+] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4", features = ["util", "timeout"] }
-tower-http = { version = "0.5.0", features = ["add-extension", "trace"] }
+tower-http = { version = "0.5.0", features = [
+  "add-extension",
+  "cors",
+  "fs",
+  "trace",
+] }
 tracing = "0.1"
 utoipa = { version = "4.2.0", features = ["axum_extras", "uuid"] }
-utoipa-swagger-ui = { version = "6.0.0", features = ["axum"] }
+utoipa-swagger-ui = { version = "7.0.0", features = ["axum"] }
 utoipa-gen = { version = "4.2.0", features = ["axum_extras", "uuid"] }
 uuid = { version = "1.0", features = ["serde", "v4"] }
 serde_json = "1.0"
 log = "0.4"
 http-body-util = "0.1.0"
+axum-extra = { version = "0.9.3", features = [
+  "async-read-body",
+  "cookie-key-expansion",
+  "cookie-private",
+  "cookie-signed",
+  "erased-json",
+  "form",
+  "json-deserializer",
+  "json-lines",
+  "multipart",
+  "protobuf",
+  "query",
+  "typed-header",
+  "typed-routing",
+] }
+chrono = { version = "0.4.38", features = ["clock"] }
+shuttle-shared-db = { version = "0.45.0", features = [
+  "diesel-async",
+  "diesel-async-bb8",
+  "diesel-async-deadpool",
+  "mongodb",
+  "postgres",
+  "sqlx",
+  "sqlx-native-tls",
+] }
+sqlx = { version = "0.7.4", features = [
+  "runtime-tokio-rustls",
+  "macros",
+  "chrono",
+] }
+anyhow = "1.0.82"
+oauth2 = "4.4.2"
+reqwest = "0.12.4"
+shuttle-secrets = "0.42.0"
+thiserror = "1.0.59"
 
 [dev-dependencies]
 hyper-util = { version = "0.1.0", features = [
@@ -27,3 +73,7 @@ hyper-util = { version = "0.1.0", features = [
 ] }
 tokio = { version = "1.0", features = ["io-std", "macros", "io-util"] }
 mime = "0.3"
+
+[lib]
+name = "rest_service_lib"
+path = "src/lib.rs"

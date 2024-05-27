@@ -1,0 +1,8 @@
+.git*
+target/*
+.trunk
+.vscode
+# allow the rest for consistency
+#*.toml
+#src/*  # Exclude all source code directories
+#*.lock

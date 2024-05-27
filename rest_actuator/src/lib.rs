@@ -4,7 +4,7 @@ pub mod api {
     use axum::{
         body::Body,
         http::{Response, StatusCode},
-        routing::{get},
+        routing::get,
         Router,
     };
     use serde_json::json;
@@ -15,11 +15,13 @@ pub mod api {
         sync::{Arc, Mutex},
     };
     use tokio::sync::broadcast;
-    
+
     //Handler for /actuator/info endpoint
     pub async fn info_handler(Extension(state): Extension<ActuatorState>) -> impl IntoResponse {
-        let is_ready = state.is_ready && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
-        let is_alive = state.is_alive && check_all_health(&state.health_checkers, |checker| checker.is_alive()).await;
+        let is_ready = state.is_ready
+            && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
+        let is_alive = state.is_alive
+            && check_all_health(&state.health_checkers, |checker| checker.is_alive()).await;
 
         Response::builder()
             .status(if is_ready && is_alive {
@@ -34,8 +36,10 @@ pub mod api {
 
     // Placeholder health handler function
     pub async fn health_handler(Extension(state): Extension<ActuatorState>) -> impl IntoResponse {
-        let is_ready = state.is_ready && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
-        let is_alive = state.is_alive && check_all_health(&state.health_checkers, |checker| checker.is_alive()).await;
+        let is_ready = state.is_ready
+            && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
+        let is_alive = state.is_alive
+            && check_all_health(&state.health_checkers, |checker| checker.is_alive()).await;
         let status = if is_ready && is_alive { "UP" } else { "DOWN" };
 
         Response::builder()
@@ -50,8 +54,11 @@ pub mod api {
     }
 
     // Handler for /actuator/health/readiness endpoint
-    pub async fn readiness_handler(Extension(state): Extension<ActuatorState>) -> impl IntoResponse {
-        let is_ready = state.is_ready && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
+    pub async fn readiness_handler(
+        Extension(state): Extension<ActuatorState>,
+    ) -> impl IntoResponse {
+        let is_ready = state.is_ready
+            && check_all_health(&state.health_checkers, |checker| checker.is_ready()).await;
         let body = json!({ "status": if is_ready { "UP" } else { "DOWN" } });
 
         Response::builder()
@@ -66,7 +73,8 @@ pub mod api {
 
     // Handler for /actuator/health/liveness endpoint
     pub async fn liveness_handler(Extension(state): Extension<ActuatorState>) -> impl IntoResponse {
-        let is_alive = state.is_alive && check_all_health(&state.health_checkers, |checker| checker.is_alive()).await;
+        let is_alive = state.is_alive
+            && check_all_health(&state.health_checkers, |checker| checker.is_alive()).await;
         let body = json!({ "status": if is_alive { "UP" } else { "DOWN" } });
 
         Response::builder()
@@ -113,23 +121,29 @@ pub mod api {
         is_health: bool,
     }
 
-    impl ActuatorState {
-        // Create a new ActuatorState instance
-        pub fn new() -> Self {
+    impl Default for ActuatorState {
+        fn default() -> ActuatorState {
             let (state_check_sender, state_check_receiver) = broadcast::channel::<()>(1);
-            let state_clone_sender = state_check_sender.clone(); // Clone the sender
             let state_clone_receiver = Arc::new(Mutex::new(state_check_receiver));
 
-            let state = Self {
+            ActuatorState {
                 health_checkers: Arc::new(HashMap::new()),
                 state_check_sender,
                 state_check_receiver: state_clone_receiver.clone(),
                 is_ready: true,
                 is_alive: true,
                 is_health: true,
-            };
+            }
+        }
+    }
 
+    impl ActuatorState {
+        // Create a new ActuatorState instance
+        pub fn new() -> Self {
+            let state = ActuatorState::default();
             let mut state_clone = state.clone();
+            let state_clone_sender = state_clone.state_check_sender.clone(); // Clone the sender
+
             tokio::spawn(async move {
                 let state_clone_receiver = state_clone_sender.subscribe();
                 state_clone.state_check_loop(state_clone_receiver).await;
@@ -140,7 +154,7 @@ pub mod api {
 
         async fn state_check_loop(&mut self, mut receiver: broadcast::Receiver<()>) {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
-            
+
             loop {
                 // Check for messages on the receiver alongside the interval
                 tokio::select! {
@@ -216,12 +230,14 @@ pub mod api {
 
     impl<RT: Clone + Send + Sync + 'static> ActuatorRouterBuilder<RT> {
         pub fn new(router: Router<RT>) -> Self {
-            Self {
-                router,
-            }
+            Self { router }
         }
 
-        pub fn with_layer<T: Clone + Send + Sync + 'static>(mut self, extention_opt: Option<Extension<T>>) -> Self { //ActuatorState
+        pub fn with_layer<T: Clone + Send + Sync + 'static>(
+            mut self,
+            extention_opt: Option<Extension<T>>,
+        ) -> Self {
+            //ActuatorState
             if let Some(extention) = extention_opt {
                 self.router = self.router.layer(extention);
             }
@@ -229,7 +245,7 @@ pub mod api {
         }
 
         //TODO: need to figure out how to create route dinamically
-        // pub fn with_route<H, S>(mut self, uri: &str, handler: H) -> Self 
+        // pub fn with_route<H, S>(mut self, uri: &str, handler: H) -> Self
         // where
         //     H: Handler<(), Extension<S>>,
         //     S: Clone + Send + Sync + 'static, {
@@ -238,12 +254,16 @@ pub mod api {
         // }
 
         pub fn with_readiness_route(mut self) -> Self {
-            self.router = self.router.route("/actuator/health/readiness", get(readiness_handler));
+            self.router = self
+                .router
+                .route("/actuator/health/readiness", get(readiness_handler));
             self
         }
 
         pub fn with_liveness_route(mut self) -> Self {
-            self.router = self.router.route("/actuator/health/liveness", get(liveness_handler));
+            self.router = self
+                .router
+                .route("/actuator/health/liveness", get(liveness_handler));
             self
         }
 
@@ -278,7 +298,7 @@ mod tests {
     use serde_json::{json, Value};
     use std::net::SocketAddr;
 
-    use api::{ActuatorRouterBuilder, ActuatorState, StateChecker}; 
+    use api::{ActuatorRouterBuilder, ActuatorState, StateChecker};
     use http::Method;
     use std::sync::{Arc, Mutex};
     use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
@@ -411,7 +431,7 @@ mod tests {
         );
 
         let extention: Option<Extension<ActuatorState>> = Some(Extension(actuator_state));
-        
+
         let mut app = ActuatorRouterBuilder::new(app)
             .with_readiness_route()
             .with_liveness_route()
@@ -420,7 +440,7 @@ mod tests {
             .with_layer(extention)
             .build()
             .into_service();
-            
+
         let request = Request::builder()
             .method(Method::GET)
             .uri("/actuator/health")
@@ -500,5 +520,3 @@ mod tests {
         // assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }
-
-

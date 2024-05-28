@@ -1,0 +1,10 @@
+/data/dev/repo/sibbull/rust/web_deployment/target/debug/deps/libshuttle_shared_db-31aabf1262468177.rmeta: /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/lib.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/mongo.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/postgres.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/../README.md
+
+/data/dev/repo/sibbull/rust/web_deployment/target/debug/deps/libshuttle_shared_db-31aabf1262468177.rlib: /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/lib.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/mongo.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/postgres.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/../README.md
+
+/data/dev/repo/sibbull/rust/web_deployment/target/debug/deps/shuttle_shared_db-31aabf1262468177.d: /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/lib.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/mongo.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/postgres.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/../README.md
+
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/lib.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/mongo.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/postgres.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shuttle-shared-db-0.45.0/src/../README.md:

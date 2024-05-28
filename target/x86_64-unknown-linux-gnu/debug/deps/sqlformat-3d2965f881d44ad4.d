@@ -1,0 +1,10 @@
+/data/dev/repo/sibbull/rust/web_deployment/target/x86_64-unknown-linux-gnu/debug/deps/libsqlformat-3d2965f881d44ad4.rmeta: /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/lib.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/formatter.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/indentation.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/inline_block.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/params.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/tokenizer.rs
+
+/data/dev/repo/sibbull/rust/web_deployment/target/x86_64-unknown-linux-gnu/debug/deps/sqlformat-3d2965f881d44ad4.d: /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/lib.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/formatter.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/indentation.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/inline_block.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/params.rs /home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/tokenizer.rs
+
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/lib.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/formatter.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/indentation.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/inline_block.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/params.rs:
+/home/sibman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/sqlformat-0.2.3/src/tokenizer.rs:
